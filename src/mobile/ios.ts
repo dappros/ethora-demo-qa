@@ -87,13 +87,36 @@ export class IosDriver {
     mkdirSync(this.outDir, { recursive: true });
   }
 
-  /** Terminate, seed AsyncStorage with the given creds, then cold-launch. */
+  /**
+   * Force the expo-dev-client to drop its cached JS bundle and re-fetch the
+   * current one from Metro. `simctl launch` reuses the cached bundle, so JS
+   * edits (and our SDK fixes) wouldn't take. Maestro `clearState` wipes app
+   * data — including the cached bundle — and the subsequent cold start
+   * re-fetches from Metro. Storage is wiped too, so seed creds AFTER this.
+   */
+  private refreshBundle(): void {
+    const flow = [`appId: ${BUNDLE_ID}`, `---`, `- stopApp`, `- launchApp:`, `    clearState: true`, ``].join("\n");
+    const flowPath = resolve(tmpdir(), `ethora-ios-refresh-${Date.now()}.yaml`);
+    writeFileSync(flowPath, flow);
+    try {
+      execSync(`maestro --device ${this.udid} test ${flowPath}`, { stdio: "ignore", timeout: 90000 });
+      log("cleared app state -> fresh bundle fetch");
+    } catch (e) {
+      log(`bundle refresh (clearState) failed: ${String((e as Error).message).slice(0, 80)}`);
+    } finally {
+      rmSync(flowPath, { force: true });
+    }
+  }
+
+  /** Refresh bundle, seed AsyncStorage with the given creds, then cold-launch. */
   async launchWithCreds(credsJson: string): Promise<void> {
+    if (process.env.SKIP_BUNDLE_REFRESH !== "1") this.refreshBundle(); // wipes cached bundle + storage, re-fetches JS
+    await sleep(12000);             // let the fresh bundle load + cache
     try { execFileSync("xcrun", ["simctl", "terminate", this.udid, BUNDLE_ID], { stdio: "ignore" }); } catch { /* not running */ }
-    await sleep(1200); // let the app fully exit before writing its storage
+    await sleep(1500);
     seedAsyncStorage(this.udid, credsJson);
     execFileSync("xcrun", ["simctl", "launch", this.udid, BUNDLE_ID], { stdio: "ignore" });
-    log("app launched with seeded creds");
+    log("app launched with seeded creds (fresh bundle)");
   }
 
   async screenshot(label: string): Promise<string> {
