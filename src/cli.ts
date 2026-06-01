@@ -1,7 +1,8 @@
 import { loadConfig } from "./config.js";
 import { provision } from "./provision/provision.js";
-import { setupRoom } from "./provision/room-setup.js";
+import { setupRoom, loginCast } from "./provision/room-setup.js";
 import { loadWorld } from "./provision/state.js";
+import { runWeb } from "./web/runner.js";
 import { midsummer } from "./scenarios/midsummer.js";
 import type { Scenario } from "./scenarios/types.js";
 
@@ -62,9 +63,33 @@ async function main() {
       await doctor(cfg);
       break;
     }
-    case "run":
+    case "run": {
+      const surface = (flags.surface as string) || "both";
+      const world = loadWorld(cfg.paths.secrets, cfg.env, scenario.id);
+      if (!world?.room) throw new Error(`No room. Run: npm run provision (or npm run reset)`);
+      const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}_${scenario.id}`;
+      console.log(`\n▸ run [${surface}] — "${scenario.id}" runId=${runId}\n`);
+      // Identities for every cast member (used by the XMPP injector).
+      const cast = await loginCast(cfg, world);
+      const idents = Object.fromEntries(Object.entries(cast).map(([h, u]) => [h, { identity: u.identity }]));
+
+      if (surface === "web" || surface === "both") {
+        const res = await runWeb(cfg, scenario, world, idents, runId, {
+          headless: flags.headed ? false : true,
+          // In web-only mode the injector also plays the iOS hero so the
+          // conversation is complete; in `both` the iOS app plays it.
+          injectIosHero: surface === "web",
+        });
+        console.log(`\n  web: ${res.screenshots.length} screenshots + video in ${res.videoDir}`);
+      }
+      if (surface === "ios") {
+        console.log("  (ios-only run not yet wired — building iOS runner next)");
+      }
+      console.log(`\n✔ run complete. artifacts/${runId}/\n`);
+      break;
+    }
     case "seed":
-      console.log(`(${cmd}) not yet wired — building runners next.`);
+      console.log(`(${cmd}) folded into reset — use: npm run reset`);
       break;
     default:
       console.log(`Usage: tsx src/cli.ts <provision|run|reset|seed|doctor> [--scenario midsummer] [--fresh] [--surface web|ios|both]`);

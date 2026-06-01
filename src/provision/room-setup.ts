@@ -56,58 +56,66 @@ export async function setupRoom(
   world: World,
   opts: { destroyPrevious?: boolean } = {}
 ): Promise<World> {
+  const api = new EthoraApi(cfg.server.apiUrl);
   const cast = await loginCast(cfg, world);
-  const heroWebHandle = scenario.heroes.web;
+  const heroWeb = cast[scenario.heroes.web];
+  if (!heroWeb) throw new Error(`web hero "${scenario.heroes.web}" not provisioned`);
+  const heroToken = heroWeb.token;
 
-  // Open XMPP connections for everyone (kept open to preserve message order).
-  for (const u of Object.values(cast)) {
-    u.xmpp = new HarnessXmpp({
-      service: cfg.server.xmppWebSocket,
-      conference: cfg.server.xmppConference,
-      identity: u.identity,
-    });
-    await u.xmpp.connect();
+  // 1. Tear down the previous room (REST), if any.
+  if (opts.destroyPrevious && world.room?.name) {
+    try {
+      await api.deleteChat(heroToken, world.room.name);
+      log(`Deleted previous room: ${world.room.title}`);
+    } catch (e) {
+      log(`Previous room delete skipped: ${String((e as Error).message).slice(0, 80)}`);
+    }
   }
-  log(`Connected ${Object.keys(cast).length} cast members over XMPP`);
 
+  // 2. Create a fresh backend-registered room owned by the web hero.
+  const chat = await api.createChat(heroToken, {
+    title: scenario.roomTitle,
+    description: scenario.theme,
+    type: "group",
+  });
+  const roomJid = `${chat.name}@${cfg.server.xmppConference}`;
+  log(`Room created: "${chat.title}" (${roomJid})`);
+
+  // 3. Add the rest of the cast as members.
+  const otherIds = Object.values(world.users)
+    .filter((u) => u.handle !== scenario.heroes.web && u.userId)
+    .map((u) => u.userId!) as string[];
+  if (otherIds.length) {
+    await api.addChatMembers(heroToken, chat.name, otherIds);
+    log(`Added ${otherIds.length} members`);
+  }
+
+  // 4. Seed backstory history over XMPP (one connection per history actor).
+  const actors = [...new Set(scenario.history.map((h) => h.actor))];
+  const conns = new Map<string, HarnessXmpp>();
   try {
-    // Destroy the prior room if asked (clear old run state).
-    if (opts.destroyPrevious && world.room?.jid) {
-      const owner = cast[heroWebHandle];
-      const destroyed = await owner!.xmpp!.destroyRoom(world.room.jid);
-      log(`Previous room ${destroyed ? "destroyed" : "destroy not confirmed"}: ${world.room.jid}`);
+    for (const handle of actors) {
+      const u = cast[handle];
+      if (!u) continue;
+      const x = new HarnessXmpp({
+        service: cfg.server.xmppWebSocket,
+        conference: cfg.server.xmppConference,
+        identity: u.identity,
+      });
+      await x.connect();
+      await x.joinAndSubscribe(roomJid);
+      conns.set(handle, x);
     }
-
-    // Create the new room as the web hero (a demo-app user).
-    const owner = cast[heroWebHandle];
-    if (!owner) throw new Error(`web hero "${heroWebHandle}" not provisioned`);
-    const roomJid = await owner.xmpp!.createRoom(scenario.roomTitle, scenario.theme);
-    log(`Room created: ${roomJid}`);
-
-    // Subscribe everyone (so the room appears in each client's room list).
-    for (const u of Object.values(cast)) {
-      await u.xmpp!.joinAndSubscribe(roomJid);
-    }
-    log(`Subscribed ${Object.keys(cast).length} members to the room`);
-
-    // Seed backstory history in order.
     for (const line of scenario.history) {
-      const u = cast[line.actor];
-      if (!u) {
-        log(`  ! history actor "${line.actor}" not provisioned; skipping line`);
-        continue;
-      }
-      await u.xmpp!.sendText(roomJid, line.text);
+      await conns.get(line.actor)?.sendText(roomJid, line.text);
     }
     if (scenario.history.length) log(`Seeded ${scenario.history.length} backstory messages`);
-
-    world.room = { jid: roomJid, title: scenario.roomTitle };
-    const path = saveWorld(cfg.paths.secrets, world);
-    log(`World updated: ${path}`);
-    return world;
   } finally {
-    for (const u of Object.values(cast)) {
-      await u.xmpp?.disconnect();
-    }
+    for (const x of conns.values()) await x.disconnect();
   }
+
+  world.room = { jid: roomJid, name: chat.name, title: chat.title };
+  const path = saveWorld(cfg.paths.secrets, world);
+  log(`World updated: ${path}`);
+  return world;
 }

@@ -26,7 +26,8 @@ export interface World {
   owner: { email: string; password: string; firstName: string; lastName: string; userId?: string };
   app: { id: string; token: string; secret?: string; domainName: string; displayName: string };
   users: Record<string, ProvisionedUser>;
-  room?: { jid: string; title: string };
+  /** `name` is the backend room id (MUC localpart); `jid` = name@conference. */
+  room?: { jid: string; name: string; title: string };
 }
 
 export function worldPath(secretsDir: string, env: EnvName, scenarioId: string): string {

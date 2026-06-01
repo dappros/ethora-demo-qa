@@ -121,18 +121,32 @@ export class HarnessXmpp {
           xml("x", { xmlns: "jabber:x:data", type: "submit" })))
     );
     await this.waitForIqResult(ownerId);
-    // roomConfig (name + description)
+    await this.configureRoom(roomJid, title, description);
+    return roomJid;
+  }
+
+  /**
+   * Submit a muc#owner room config: name + description, persistent + public +
+   * open membership. Requires the connected user to be the room owner.
+   */
+  async configureRoom(roomJid: string, title: string, description = ""): Promise<boolean> {
     const cfgId = `room-config:${Date.now()}`;
+    const field = (varName: string, value: string) =>
+      xml("field", { var: varName }, xml("value", {}, value));
     this.send(
       xml("iq", { id: cfgId, to: roomJid, type: "set" },
         xml("query", { xmlns: "http://jabber.org/protocol/muc#owner" },
           xml("x", { xmlns: "jabber:x:data", type: "submit" },
-            xml("field", { var: "FORM_TYPE" }, xml("value", {}, "http://jabber.org/protocol/muc#roomconfig")),
-            xml("field", { var: "muc#roomconfig_roomname" }, xml("value", {}, title)),
-            xml("field", { var: "muc#roomconfig_roomdesc" }, xml("value", {}, description)))))
+            field("FORM_TYPE", "http://jabber.org/protocol/muc#roomconfig"),
+            field("muc#roomconfig_roomname", title),
+            field("muc#roomconfig_roomdesc", description),
+            field("muc#roomconfig_persistentroom", "1"),
+            field("muc#roomconfig_publicroom", "1"),
+            field("muc#roomconfig_membersonly", "0"),
+            field("muc#roomconfig_allowinvites", "1"),
+            field("muc#roomconfig_changesubject", "1"))))
     );
-    await this.waitForIqResult(cfgId);
-    return roomJid;
+    return this.waitForIqResult(cfgId);
   }
 
   /** mucsub subscribe so the room shows up in this user's getRooms list. */
@@ -152,6 +166,35 @@ export class HarnessXmpp {
   async joinAndSubscribe(roomJid: string): Promise<void> {
     await this.presence(roomJid, 500);
     await this.subscribe(roomJid);
+  }
+
+  /**
+   * Query the rooms this user belongs to (mod_ethora custom getrooms). Returns
+   * the room JIDs found in the response. Used to discover the app default room.
+   */
+  async getRooms(timeoutMs = 4000): Promise<string[]> {
+    const id = "getUserRooms";
+    return new Promise<string[]>((resolve) => {
+      const found = new Set<string>();
+      const handler = (stanza: any) => {
+        if (stanza.is("iq") && stanza.attrs.id === id) {
+          const text = stanza.toString();
+          for (const m of text.matchAll(/[a-z0-9_]+@conference\.[a-z0-9.-]+/gi)) {
+            found.add(m[0]);
+          }
+          this.xmpp?.removeListener("stanza", handler);
+          resolve([...found]);
+        }
+      };
+      this.xmpp?.on("stanza", handler);
+      this.send(
+        xml("iq", { type: "get", from: this.jidString, id }, xml("query", { xmlns: "ns:getrooms" }))
+      );
+      setTimeout(() => {
+        this.xmpp?.removeListener("stanza", handler);
+        resolve([...found]);
+      }, timeoutMs);
+    });
   }
 
   /** Send a groupchat text message with the Ethora <data> envelope. */

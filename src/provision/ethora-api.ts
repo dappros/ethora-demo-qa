@@ -209,55 +209,40 @@ export class EthoraApi {
     await this.req("PUT", "/v1/users/", { token: userToken, form });
   }
 
-  // --- Rooms ---------------------------------------------------------------
+  // --- Rooms (backend-integrated /v1/chats; shows in client room lists) -----
 
-  /** Create a chat room under an app. pinned=true => SDK clients auto-join. */
-  async createRoom(
+  /**
+   * Create a chat room (POST /v1/chats). Returns the room `name` (the MUC
+   * localpart) + _id + title. The XMPP JID is `${name}@${conference}`.
+   */
+  async createChat(
     userToken: string,
-    appId: string,
-    title: string,
-    pinned = true
-  ): Promise<RoomInfo> {
-    const data = await this.req<any>(
-      "POST",
-      `/v1/apps/${appId}/chats`,
-      { token: userToken, json: { title, pinned } }
-    );
-    const room = data.room || data.chat || data.result || data;
-    // Normalize the JID field across response shapes.
-    return {
-      _id: room._id,
-      jid: room.jid || room.roomJid || room.chatJid,
-      title: room.title ?? title,
-      pinned: room.pinned ?? pinned,
-    };
-  }
-
-  /** Default (pinned) rooms for an app, via the owner user token. */
-  async getDefaultRooms(userToken: string, appId: string): Promise<RoomInfo[]> {
-    const data = await this.req<any>(
-      "GET",
-      `/v1/apps/get-default-rooms/app-id/${appId}`,
-      { token: userToken }
-    );
-    const list = data.rooms || data.result || data || [];
-    return (Array.isArray(list) ? list : []).map((r: any) => ({
-      _id: r._id,
-      jid: r.jid || r.roomJid || r.chatJid,
-      title: r.title || r.name,
-      pinned: r.pinned,
-    }));
-  }
-
-  /** Delete a chat room by JID (DELETE /v1/apps/{appId}/chats, body chatJid). */
-  async deleteRoom(
-    userToken: string,
-    appId: string,
-    chatJid: string
-  ): Promise<void> {
-    await this.req("DELETE", `/v1/apps/${appId}/chats`, {
+    opts: { title: string; description?: string; type?: "group" | "public" }
+  ): Promise<{ name: string; _id: string; title: string }> {
+    const data = await this.req<any>("POST", "/v1/chats", {
       token: userToken,
-      json: { chatJid },
+      json: { title: opts.title, description: opts.description || "", type: opts.type || "group" },
     });
+    const room = data.result || data;
+    return { name: room.name, _id: room._id, title: room.title };
+  }
+
+  /** Add members to a room by user _id (POST /v1/chats/users-access). */
+  async addChatMembers(userToken: string, chatName: string, memberIds: string[]): Promise<void> {
+    await this.req("POST", "/v1/chats/users-access", {
+      token: userToken,
+      json: { chatName, members: memberIds },
+    });
+  }
+
+  /** List the authenticated user's rooms (GET /v1/chats/my). */
+  async listMyChats(userToken: string): Promise<RoomInfo[]> {
+    const data = await this.req<any>("GET", "/v1/chats/my", { token: userToken });
+    return (data.items || []).map((r: any) => ({ _id: r._id, jid: r.name, title: r.title }));
+  }
+
+  /** Delete a room by its `name` (DELETE /v1/chats). */
+  async deleteChat(userToken: string, chatName: string): Promise<void> {
+    await this.req("DELETE", "/v1/chats", { token: userToken, json: { chatName } });
   }
 }
