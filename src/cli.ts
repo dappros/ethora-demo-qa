@@ -104,6 +104,47 @@ async function main() {
       console.log(`\n✔ run complete. artifacts/${runId}/\n`);
       break;
     }
+    case "video": {
+      const world = loadWorld(cfg.paths.secrets, cfg.env, scenario.id);
+      if (!world?.room) throw new Error(`No room. Run: npm run provision (or npm run reset)`);
+      const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}_${scenario.id}`;
+      console.log(`\n▸ video — side-by-side "${scenario.id}" runId=${runId}\n`);
+      const cast = await loginCast(cfg, world);
+      const idents = Object.fromEntries(Object.entries(cast).map(([h, u]) => [h, { identity: u.identity }]));
+
+      const { IosDriver, buildIosCreds } = await import("./mobile/ios.js");
+      const { composeSideBySide } = await import("./video/compose.js");
+      const { readdirSync } = await import("node:fs");
+      const { resolve: presolve } = await import("node:path");
+
+      // 1. Bring the iOS hero online in the room.
+      const iosCreds = await buildIosCreds(cfg, world, scenario.heroes.ios);
+      const ios = new IosDriver(cfg, runId);
+      await ios.launchWithCreds(JSON.stringify(iosCreds));
+      await new Promise((r) => setTimeout(r, 12000));
+
+      // 2. Start both recordings ~together, then drive the web hero (headed so
+      //    it's also watchable live). iOS mirrors the exchange in real time.
+      ios.startRecording();
+      const res = await runWeb(cfg, scenario, world, idents, runId, {
+        headless: flags.headless ? true : false, // headed by default for video
+        injectIosHero: true,
+      });
+      await ios.stopRecording();
+
+      // 3. Locate the web .webm and compose side-by-side.
+      const webm = readdirSync(res.videoDir).find((f) => f.endsWith(".webm"));
+      if (!webm) throw new Error("web video (.webm) not found — cannot compose");
+      const out = presolve(cfg.paths.artifacts, runId, "side-by-side.mp4");
+      console.log(`\n  composing side-by-side video…`);
+      composeSideBySide({
+        webVideo: presolve(res.videoDir, webm),
+        iosVideo: presolve(cfg.paths.artifacts, runId, "ios", "ios.mp4"),
+        out,
+      });
+      console.log(`\n✔ side-by-side video: ${out}\n`);
+      break;
+    }
     case "avatars": {
       console.log(`\n▸ avatars — refresh PNG avatars for "${scenario.id}"\n`);
       const world = loadWorld(cfg.paths.secrets, cfg.env, scenario.id);

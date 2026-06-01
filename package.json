@@ -15,6 +15,7 @@
     "run:web": "tsx src/cli.ts run --surface web",
     "run:ios": "tsx src/cli.ts run --surface ios",
     "run": "tsx src/cli.ts run --surface both",
+    "video": "tsx src/cli.ts video",
     "doctor": "tsx src/cli.ts doctor",
     "typecheck": "tsc --noEmit"
   },

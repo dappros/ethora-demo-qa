@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -117,6 +117,34 @@ export class IosDriver {
     seedAsyncStorage(this.udid, credsJson);
     execFileSync("xcrun", ["simctl", "launch", this.udid, BUNDLE_ID], { stdio: "ignore" });
     log("app launched with seeded creds (fresh bundle)");
+  }
+
+  private recProc: ChildProcess | null = null;
+
+  /** Start recording the simulator screen to an mp4 (runs until stopRecording). */
+  startRecording(): string {
+    const file = resolve(this.outDir, "ios.mp4");
+    rmSync(file, { force: true });
+    this.recProc = spawn(
+      "xcrun",
+      ["simctl", "io", this.udid, "recordVideo", "--codec", "h264", "--force", file],
+      { stdio: "ignore" }
+    );
+    log("recording simulator -> ios.mp4");
+    return file;
+  }
+
+  /** Stop recording — SIGINT lets simctl finalize the mp4 cleanly. */
+  async stopRecording(): Promise<void> {
+    if (!this.recProc) return;
+    const proc = this.recProc;
+    this.recProc = null;
+    await new Promise<void>((res) => {
+      proc.on("close", () => res());
+      proc.kill("SIGINT");
+      setTimeout(res, 5000); // safety net
+    });
+    log("simulator recording finalized");
   }
 
   async screenshot(label: string): Promise<string> {
