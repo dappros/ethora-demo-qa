@@ -283,28 +283,49 @@ export async function runWeb(
 
 // --- Best-effort message interactions (UI menus vary; never fail the run) ---
 
-async function openMessageMenu(page: Page, text: string) {
-  const bubble = page.locator(`[data-testid="chat_message"]`, { hasText: text }).first();
+/**
+ * Open the per-message context menu and wait until `item` is visible. Edit/
+ * Delete only render on the hero's own messages (isUser), so target
+ * `data-is-user="true"` bubbles. The menu is a right-click (onContextMenu);
+ * retry it a few times since the first right-click can land before the bubble
+ * is hit-testable or get swallowed by a closing overlay.
+ */
+async function openMessageMenu(page: Page, text: string, item: "msg_edit" | "msg_delete") {
+  const bubble = page
+    .locator(`[data-testid="chat_message"][data-is-user="true"]`, { hasText: text })
+    .first();
   await bubble.scrollIntoViewIfNeeded();
-  await bubble.hover();
-  // Interaction trigger is often a per-bubble button revealed on hover.
-  const trigger = bubble.locator("button").last();
-  await trigger.click({ timeout: 3000 });
-  return bubble;
+  // Right-click the text element (inside the bubble), not the container: own
+  // messages are right-aligned, so the full-width container's centre can fall
+  // in the empty gutter and miss the bubble's onContextMenu handler.
+  const target = bubble.getByText(text).first();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await target.click({ button: "right" });
+    try {
+      await page.getByTestId(item).waitFor({ state: "visible", timeout: 1500 });
+      return;
+    } catch {
+      await sleep(400);
+    }
+  }
+  throw new Error(`context menu item "${item}" never appeared for "${text}"`);
 }
 
 async function editWebMessage(page: Page, target: string, next: string) {
-  await openMessageMenu(page, target);
-  await page.getByText(/edit/i).first().click({ timeout: 3000 });
+  await openMessageMenu(page, target, "msg_edit");
+  await page.getByTestId("msg_edit").click();
+  // Edit mode loads the original text into the compose input; replace it.
   const input = page.getByTestId("chat_input").first();
+  await input.click();
   await input.fill(next);
   await page.getByTestId("chat_send_button").first().click();
 }
 
 async function deleteWebMessage(page: Page, target: string) {
-  await openMessageMenu(page, target);
-  await page.getByText(/delete|remove/i).first().click({ timeout: 3000 });
-  await page.getByText(/confirm|yes|delete/i).first().click({ timeout: 2000 }).catch(() => {});
+  await openMessageMenu(page, target, "msg_delete");
+  await page.getByTestId("msg_delete").click();
+  // Delete opens a confirmation modal; confirm it.
+  await page.getByTestId("modal_confirm_button").click({ timeout: 4000 });
 }
 
 async function scrollHistory(page: Page) {

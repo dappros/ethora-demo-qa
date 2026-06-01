@@ -72,7 +72,7 @@ export const midsummer: Scenario = {
     // Edit + delete on the web hero.
     { kind: "message", actor: "hermia", text: "And yet, to say the truth, reason and love keep little compay.",
       caption: "Web sends a message with a typo" },
-    { kind: "edit", actor: "hermia", targetText: "keep little compay", newText: "keep little company nowadays.",
+    { kind: "edit", actor: "hermia", targetText: "keep little compay", newText: "And yet, to say the truth, reason and love keep little company.",
       caption: "Editing the message, the edit syncs to iOS" },
     { kind: "screenshot", surface: "web", label: "07-web-message-edited" },
     { kind: "screenshot", surface: "ios", label: "08-ios-sees-edit", note: "Edit propagates to mobile." },
