@@ -1,0 +1,30 @@
+{
+  "name": "ethora-demo-qa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-driving demo + QA harness for the Ethora chat SDKs. Provisions a themed test world on the Ethora server, then drives the React.js and React Native chat components through scripted scenarios and captures screenshots/video for marketing and QA.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "provision": "tsx src/cli.ts provision",
+    "reset": "tsx src/cli.ts reset",
+    "seed": "tsx src/cli.ts seed",
+    "run:web": "tsx src/cli.ts run --surface web",
+    "run:ios": "tsx src/cli.ts run --surface ios",
+    "run": "tsx src/cli.ts run --surface both",
+    "doctor": "tsx src/cli.ts doctor",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xmpp/client": "^0.13.1",
+    "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

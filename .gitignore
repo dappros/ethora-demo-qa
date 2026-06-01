@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+dist/
+
+# Secrets — NEVER commit. Provisioned account/app/user credentials live here only.
+secrets/
+.env
+.env.local
+*.local
+
+# Run artifacts (screenshots / video / logs from scenario runs)
+artifacts/
+
+# OS / editor noise
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Generated Maestro flows (templated at runtime from scenarios)
+maestro/_generated/
