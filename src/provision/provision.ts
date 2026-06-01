@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { HarnessConfig } from "../config.js";
 import type { Scenario } from "../scenarios/types.js";
 import { EthoraApi, EthoraApiError, BASE_APP_DOMAIN } from "./ethora-api.js";
-import { avatarBuffer } from "./avatar.js";
+import { AvatarRasterizer } from "./avatar.js";
 import { loadWorld, saveWorld, type World, type ProvisionedUser } from "./state.js";
 
 const log = (m: string) => console.log(`  ${m}`);
@@ -65,6 +65,8 @@ export async function provision(
   log(`App created: ${app._id} (${app.domainName})`);
 
   // 3. Cast — register each under the new app, then set name + avatar.
+  const raster = opts.skipAvatars ? null : new AvatarRasterizer();
+  if (raster) await raster.init();
   const users: Record<string, ProvisionedUser> = {};
   for (const member of scenario.cast) {
     const email = demoEmail(scenario.id, member.handle, suffix);
@@ -78,13 +80,10 @@ export async function provision(
       lastName: member.lastName,
       userId: login.user?._id,
     };
-    if (!opts.skipAvatars) {
+    if (raster) {
       try {
-        await api.updateOwnProfile(
-          login.token,
-          { firstName: member.firstName, lastName: member.lastName, description: member.role },
-          avatarBuffer({ firstName: member.firstName, lastName: member.lastName, seed: member.avatarSeed, color: member.avatarColor })
-        );
+        const png = await raster.toPng({ firstName: member.firstName, lastName: member.lastName, seed: member.avatarSeed, color: member.avatarColor });
+        await api.updateOwnProfile(login.token, { firstName: member.firstName, lastName: member.lastName, description: member.role }, png);
         u.avatarUploaded = true;
       } catch (e) {
         const msg = e instanceof EthoraApiError ? `${e.status}` : String(e);
@@ -94,6 +93,7 @@ export async function provision(
     users[member.handle] = u;
     log(`Cast: ${member.firstName} ${member.lastName} (${member.handle})${u.avatarUploaded ? " +avatar" : ""}`);
   }
+  await raster?.close();
 
   // The group room itself is created over XMPP per-run (see room-setup.ts),
   // because room creation is an XMPP operation, not a REST one, and the room
@@ -109,4 +109,25 @@ export async function provision(
   const path = saveWorld(cfg.paths.secrets, world);
   log(`World saved (gitignored): ${path}`);
   return world;
+}
+
+/** Re-upload PNG avatars for an already-provisioned cast (idempotent). */
+export async function refreshAvatars(cfg: HarnessConfig, scenario: Scenario, world: World): Promise<void> {
+  const api = new EthoraApi(cfg.server.apiUrl);
+  const raster = new AvatarRasterizer();
+  await raster.init();
+  try {
+    for (const member of scenario.cast) {
+      const rec = world.users[member.handle];
+      if (!rec) continue;
+      const login = await api.login(world.app.token, rec.email, rec.password);
+      const png = await raster.toPng({ firstName: member.firstName, lastName: member.lastName, seed: member.avatarSeed, color: member.avatarColor });
+      await api.updateOwnProfile(login.token, { firstName: member.firstName, lastName: member.lastName, description: member.role }, png);
+      rec.avatarUploaded = true;
+      log(`Avatar refreshed: ${member.firstName} (${member.handle})`);
+    }
+    saveWorld(cfg.paths.secrets, world);
+  } finally {
+    await raster.close();
+  }
 }

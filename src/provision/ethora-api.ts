@@ -108,7 +108,14 @@ export class EthoraApi {
       headers["Content-Type"] = "application/json";
       body = JSON.stringify(opts.json);
     }
-    const resp = await fetch(url, { method, headers, body });
+    let resp = await fetch(url, { method, headers, body });
+    // Back off on rate limiting — the QA login endpoint is throttled and the
+    // harness logs in the whole cast repeatedly.
+    for (let attempt = 0; resp.status === 429 && attempt < 5; attempt++) {
+      const wait = 2000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, wait));
+      resp = await fetch(url, { method, headers, body });
+    }
     const text = await resp.text();
     if (!resp.ok) throw new EthoraApiError(method, url, resp.status, text);
     if (!text) return undefined as T;

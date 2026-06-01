@@ -1,5 +1,5 @@
 import { loadConfig } from "./config.js";
-import { provision } from "./provision/provision.js";
+import { provision, refreshAvatars } from "./provision/provision.js";
 import { setupRoom, loginCast } from "./provision/room-setup.js";
 import { loadWorld } from "./provision/state.js";
 import { runWeb } from "./web/runner.js";
@@ -86,6 +86,14 @@ async function main() {
         console.log("  (ios-only run not yet wired — building iOS runner next)");
       }
       console.log(`\n✔ run complete. artifacts/${runId}/\n`);
+      break;
+    }
+    case "avatars": {
+      console.log(`\n▸ avatars — refresh PNG avatars for "${scenario.id}"\n`);
+      const world = loadWorld(cfg.paths.secrets, cfg.env, scenario.id);
+      if (!world) throw new Error(`No world. Run: npm run provision`);
+      await refreshAvatars(cfg, scenario, world);
+      console.log(`\n✔ avatars refreshed\n`);
       break;
     }
     case "seed":

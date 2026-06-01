@@ -40,15 +40,52 @@ export function avatarSvg(opts: {
 </svg>`;
 }
 
-export function avatarBuffer(opts: {
+export interface AvatarOpts {
   firstName: string;
   lastName: string;
   seed: string;
   color?: string;
-}): { buffer: Buffer; filename: string; contentType: string } {
-  return {
-    buffer: Buffer.from(avatarSvg(opts), "utf8"),
-    filename: `${opts.seed.toLowerCase()}.svg`,
-    contentType: "image/svg+xml",
-  };
+}
+
+/**
+ * Rasterize the themed avatar SVG to PNG via a headless Chromium page.
+ *
+ * Why PNG and not SVG: the QA file server serves every upload as
+ * `application/octet-stream` with `X-Content-Type-Options: nosniff`. Browsers
+ * refuse to render SVG-as-octet-stream in <img> (SVG can carry script), so SVG
+ * avatars fall back to initials. Raster images still render in <img> under the
+ * same headers, so we ship PNG. Playwright gives us real text rendering for
+ * free, avoiding a hand-rolled glyph rasterizer.
+ *
+ * One browser is reused across the whole cast (cheap), so callers should
+ * create one rasterizer, render all avatars, then close().
+ */
+export class AvatarRasterizer {
+  private browser: import("playwright").Browser | null = null;
+  private page: import("playwright").Page | null = null;
+
+  async init(): Promise<void> {
+    const { chromium } = await import("playwright");
+    this.browser = await chromium.launch({ headless: true });
+    const ctx = await this.browser.newContext({ deviceScaleFactor: 1 });
+    this.page = await ctx.newPage();
+    await this.page.setViewportSize({ width: 256, height: 256 });
+  }
+
+  async toPng(opts: AvatarOpts): Promise<{ buffer: Buffer; filename: string; contentType: string }> {
+    if (!this.page) throw new Error("AvatarRasterizer not initialized");
+    const svg = avatarSvg(opts);
+    await this.page.setContent(
+      `<!doctype html><html><body style="margin:0;padding:0">${svg}</body></html>`,
+      { waitUntil: "load" }
+    );
+    const buffer = await this.page.locator("svg").screenshot({ type: "png" });
+    return { buffer, filename: `${opts.seed.toLowerCase()}.png`, contentType: "image/png" };
+  }
+
+  async close(): Promise<void> {
+    await this.browser?.close();
+    this.browser = null;
+    this.page = null;
+  }
 }
