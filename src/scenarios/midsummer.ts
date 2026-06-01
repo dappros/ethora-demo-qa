@@ -42,44 +42,56 @@ export const midsummer: Scenario = {
 
   script: [
     { kind: "screenshot", surface: "both", label: "00-room-open", note: "Both clients joined; backstory history visible." },
+    { kind: "wait", ms: 2500, note: "Hold on the opening shot — same room, both clients." },
 
-    // Lysander (iOS) opens the live exchange.
-    { kind: "message", actor: "lysander", text: "The course of true love never did run smooth." },
+    // Lysander (mobile) opens the live exchange.
+    { kind: "message", actor: "lysander", text: "The course of true love never did run smooth.",
+      caption: "Mobile (iOS) sends a message" },
     { kind: "screenshot", surface: "web", label: "01-web-receives-lysander", note: "Web shows Lysander's message arriving from the mobile client." },
 
     // Hermia (web) shows a typing indicator on the mobile side.
-    { kind: "typing", actor: "hermia", ms: 2500 },
+    { kind: "typing", actor: "hermia", ms: 3000,
+      caption: "Web user is typing, iOS shows the indicator" },
     { kind: "screenshot", surface: "ios", label: "02-ios-sees-typing", note: "iOS shows Hermia typing." },
 
-    { kind: "message", actor: "hermia", text: "I would my father look'd but with my eyes." },
+    { kind: "message", actor: "hermia", text: "I would my father look'd but with my eyes.",
+      caption: "Web sends a reply, it appears on iOS" },
     { kind: "screenshot", surface: "ios", label: "03-ios-receives-hermia", note: "Mobile receives Hermia's reply from the web client." },
 
     // Media from the web hero.
-    { kind: "media", actor: "hermia", asset: "moonlit-forest.png", caption: "The forest, by moonlight." },
+    { kind: "media", actor: "hermia", asset: "moonlit-forest.png",
+      caption: "Web sends an image, it renders on iOS" },
     { kind: "screenshot", surface: "web", label: "04-web-media-sent" },
     { kind: "screenshot", surface: "ios", label: "05-ios-media-received", note: "Image rendered on mobile." },
 
-    // A fairy chimes in (seeded over XMPP) so the group feels alive.
-    { kind: "message", actor: "puck", text: "Lord, what fools these mortals be!" },
+    // A fairy chimes in so the group feels alive.
+    { kind: "message", actor: "puck", text: "Lord, what fools these mortals be!",
+      caption: "A third participant joins the group chat" },
     { kind: "screenshot", surface: "both", label: "06-puck-groupchat", note: "Third participant lands on both clients." },
 
     // Edit + delete on the web hero.
-    { kind: "message", actor: "hermia", text: "And yet, to say the truth, reason and love keep little compay." },
-    { kind: "edit", actor: "hermia", targetText: "keep little compay", newText: "keep little company nowadays." },
+    { kind: "message", actor: "hermia", text: "And yet, to say the truth, reason and love keep little compay.",
+      caption: "Web sends a message with a typo" },
+    { kind: "edit", actor: "hermia", targetText: "keep little compay", newText: "keep little company nowadays.",
+      caption: "Editing the message, the edit syncs to iOS" },
     { kind: "screenshot", surface: "web", label: "07-web-message-edited" },
     { kind: "screenshot", surface: "ios", label: "08-ios-sees-edit", note: "Edit propagates to mobile." },
 
-    { kind: "message", actor: "hermia", text: "(this line is a mistake)" },
-    { kind: "delete", actor: "hermia", targetText: "(this line is a mistake)" },
+    { kind: "message", actor: "hermia", text: "(this line is a mistake)",
+      caption: "Sending a message, then deleting it" },
+    { kind: "delete", actor: "hermia", targetText: "(this line is a mistake)",
+      caption: "Message deleted, removed on both clients" },
     { kind: "screenshot", surface: "web", label: "09-web-message-deleted" },
 
     // History / scrollback on the web hero.
-    { kind: "history", actor: "hermia", note: "Scroll up to load earlier backstory messages." },
+    { kind: "history", actor: "hermia",
+      caption: "Loading older message history (scrollback)" },
     { kind: "screenshot", surface: "web", label: "10-web-history-scrollback" },
 
     // Closing line from the mobile hero; demonstrate read receipts.
-    { kind: "message", actor: "lysander", text: "Sleep give thee all his rest!" },
-    { kind: "wait", ms: 1500 },
+    { kind: "message", actor: "lysander", text: "Sleep give thee all his rest!",
+      caption: "iOS sends the closing line, web shows read receipts" },
+    { kind: "wait", ms: 2500 },
     { kind: "screenshot", surface: "ios", label: "11-ios-read-receipt", note: "Read ticks after web client views the message." },
     { kind: "screenshot", surface: "both", label: "12-final", note: "Final state of both clients." },
   ],

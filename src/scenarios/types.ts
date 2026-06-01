@@ -27,14 +27,18 @@ export interface CastMember {
   avatarColor?: string;
 }
 
-/** A single step in the scripted conversation. */
+/**
+ * A single step in the scripted conversation. The optional `caption` on action
+ * beats is a short, viewer-facing line ("Web sends a message; it appears on
+ * iOS") burned into the side-by-side video at the moment the beat runs.
+ */
 export type Beat =
-  | { kind: "message"; actor: string; text: string; note?: string }
+  | { kind: "message"; actor: string; text: string; caption?: string; note?: string }
   | { kind: "media"; actor: string; asset: string; caption?: string; note?: string }
-  | { kind: "typing"; actor: string; ms?: number; note?: string }
-  | { kind: "edit"; actor: string; targetText: string; newText: string; note?: string }
-  | { kind: "delete"; actor: string; targetText: string; note?: string }
-  | { kind: "history"; actor: string; note?: string }
+  | { kind: "typing"; actor: string; ms?: number; caption?: string; note?: string }
+  | { kind: "edit"; actor: string; targetText: string; newText: string; caption?: string; note?: string }
+  | { kind: "delete"; actor: string; targetText: string; caption?: string; note?: string }
+  | { kind: "history"; actor: string; caption?: string; note?: string }
   | { kind: "screenshot"; surface: Surface | "both"; label: string; note?: string }
   | { kind: "wait"; ms: number; note?: string };
 

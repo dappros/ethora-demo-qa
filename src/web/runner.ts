@@ -103,6 +103,8 @@ class Injector {
 export interface WebRunResult {
   screenshots: string[];
   videoDir: string;
+  /** Caption cues for the side-by-side video, in seconds from video start. */
+  captions: { at: number; text: string }[];
 }
 
 /**
@@ -148,6 +150,8 @@ export async function runWeb(
       deviceScaleFactor: 2,
     });
     const page = await ctx.newPage();
+    const videoStartMs = Date.now(); // video recording begins ~here
+    const captions: { at: number; text: string }[] = [];
     await page.addInitScript((c) => {
       (window as unknown as Record<string, unknown>).__ETHORA_DEMO_CONFIG__ = c;
     }, override);
@@ -183,8 +187,16 @@ export async function runWeb(
     const isInjected = (actor: string) =>
       actor !== heroWeb && (opts.injectIosHero || actor !== heroIos);
 
+    // A short settle after each message so the viewer can connect a message
+    // sent on the left (web) with it appearing on the right (iOS).
+    const SETTLE = 1700;
+
     for (const beat of scenario.script) {
       try {
+        // Record the caption cue at the moment the beat starts.
+        const cap = (beat as { caption?: string }).caption;
+        if (cap) captions.push({ at: (Date.now() - videoStartMs) / 1000, text: cap });
+
         switch (beat.kind) {
           case "message": {
             if (isWebActor(beat.actor)) {
@@ -192,10 +204,10 @@ export async function runWeb(
               await input.click();
               await input.fill(beat.text);
               await page.getByTestId("chat_send_button").first().click();
-              await sleep(900);
+              await sleep(900 + SETTLE);
             } else if (isInjected(beat.actor)) {
               await injector.sendAs(beat.actor, beat.text);
-              await sleep(900);
+              await sleep(900 + SETTLE);
             }
             break;
           }
@@ -208,7 +220,7 @@ export async function runWeb(
               await chooser.setFiles(mediaPath);
               await sleep(1200);
               await page.getByTestId("chat_send_button").first().click().catch(() => {});
-              await sleep(2500);
+              await sleep(2500 + SETTLE);
             }
             break;
           }
@@ -260,7 +272,7 @@ export async function runWeb(
     }
 
     await sleep(1500);
-    return { screenshots, videoDir: outDir };
+    return { screenshots, videoDir: outDir, captions };
   } finally {
     await injector.close();
     await ctx?.close(); // flushes video

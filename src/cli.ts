@@ -141,7 +141,9 @@ async function main() {
         webVideo: presolve(res.videoDir, webm),
         iosVideo: presolve(cfg.paths.artifacts, runId, "ios", "ios.mp4"),
         out,
+        captions: res.captions,
       });
+      console.log(`  ${res.captions.length} timed captions burned in`);
       console.log(`\n✔ side-by-side video: ${out}\n`);
       break;
     }
