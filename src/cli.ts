@@ -73,17 +73,33 @@ async function main() {
       const cast = await loginCast(cfg, world);
       const idents = Object.fromEntries(Object.entries(cast).map(([h, u]) => [h, { identity: u.identity }]));
 
-      if (surface === "web" || surface === "both") {
+      if (surface === "ios") {
+        const { runIos } = await import("./mobile/ios.js");
+        const res = await runIos(cfg, scenario, world, runId);
+        console.log(`\n  ios: ${res.screenshots.length} screenshots in artifacts/${runId}/ios`);
+      } else if (surface === "both") {
+        // Cross-platform: bring the iOS hero online in the room first, then
+        // drive the web hero through the scenario (with the iOS hero's lines
+        // injected so the web side reads complete), while the live iOS client
+        // mirrors the whole exchange. Capture iOS before + after.
+        const { IosDriver, buildIosCreds } = await import("./mobile/ios.js");
+        const iosCreds = await buildIosCreds(cfg, world, scenario.heroes.ios);
+        const ios = new IosDriver(cfg, runId);
+        await ios.launchWithCreds(JSON.stringify(iosCreds));
+        await new Promise((r) => setTimeout(r, 12000));
+        await ios.screenshot("ios-00-before");
         const res = await runWeb(cfg, scenario, world, idents, runId, {
           headless: flags.headed ? false : true,
-          // In web-only mode the injector also plays the iOS hero so the
-          // conversation is complete; in `both` the iOS app plays it.
-          injectIosHero: surface === "web",
+          injectIosHero: true,
+        });
+        await ios.screenshot("ios-99-after");
+        console.log(`\n  web: ${res.screenshots.length} screenshots + video; ios: mirror screenshots in artifacts/${runId}/ios`);
+      } else {
+        const res = await runWeb(cfg, scenario, world, idents, runId, {
+          headless: flags.headed ? false : true,
+          injectIosHero: true,
         });
         console.log(`\n  web: ${res.screenshots.length} screenshots + video in ${res.videoDir}`);
-      }
-      if (surface === "ios") {
-        console.log("  (ios-only run not yet wired — building iOS runner next)");
       }
       console.log(`\n✔ run complete. artifacts/${runId}/\n`);
       break;
