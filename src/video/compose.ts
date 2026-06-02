@@ -36,6 +36,34 @@ function writeSrt(captions: { at: number; text: string }[]): string {
   return path;
 }
 
+/** Single-pane captioned video (web only) — same labelled header + SRT captions. */
+export function composeSinglePane(opts: {
+  video: string;
+  out: string;
+  height?: number;
+  label?: string;
+  captions?: { at: number; text: string }[];
+}): string {
+  const h = opts.height ?? 1000;
+  const label = (opts.label ?? "Web (React.js SDK)").replace(/[—–]/g, "-").replace(/['":]/g, "");
+  const hasFont = existsSync(MAC_FONT);
+  const header = hasFont
+    ? `,drawtext=fontfile=${MAC_FONT}:text=${label}:x=(w-text_w)/2:y=22:fontsize=34:fontcolor=0x1b1340`
+    : "";
+  let tail = `[0:v]scale=-2:${h},setsar=1,pad=iw:ih+72:0:72:white${header}[v]`;
+  if (opts.captions?.length) {
+    const srt = writeSrt(opts.captions);
+    const style = "FontName=Arial,FontSize=17,Bold=1,PrimaryColour=&H00FFFFFF&,BackColour=&HC0000000&,BorderStyle=4,Outline=0,Shadow=0,Alignment=2,MarginV=26";
+    tail = `[0:v]scale=-2:${h},setsar=1,pad=iw:ih+72:0:72:white${header},subtitles=${srt}:force_style='${style}'[v]`;
+  }
+  try {
+    sh(["-y", "-i", opts.video, "-filter_complex", tail, "-map", "[v]", "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", opts.out]);
+  } catch {
+    sh(["-y", "-i", opts.video, "-vf", `scale=-2:${h}`, "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", opts.out]);
+  }
+  return opts.out;
+}
+
 export function composeSideBySide(opts: {
   webVideo: string;
   iosVideo: string;

@@ -115,38 +115,45 @@ async function main() {
       const idents = Object.fromEntries(Object.entries(cast).map(([h, u]) => [h, { identity: u.identity }]));
 
       const { IosDriver, buildIosCreds } = await import("./mobile/ios.js");
-      const { composeSideBySide } = await import("./video/compose.js");
+      const { composeSideBySide, composeSinglePane } = await import("./video/compose.js");
       const { readdirSync } = await import("node:fs");
       const { resolve: presolve } = await import("node:path");
+      const webOnly = !!flags["web-only"];
 
-      // 1. Bring the iOS hero online in the room.
-      const iosCreds = await buildIosCreds(cfg, world, scenario.heroes.ios);
-      const ios = new IosDriver(cfg, runId);
-      await ios.launchWithCreds(JSON.stringify(iosCreds));
-      await new Promise((r) => setTimeout(r, 12000));
+      // 1. Bring the iOS hero online in the room (skipped in --web-only).
+      let ios: InstanceType<typeof IosDriver> | undefined;
+      if (!webOnly) {
+        const iosCreds = await buildIosCreds(cfg, world, scenario.heroes.ios);
+        ios = new IosDriver(cfg, runId);
+        await ios.launchWithCreds(JSON.stringify(iosCreds));
+        await new Promise((r) => setTimeout(r, 12000));
+        ios.startRecording();
+      }
 
-      // 2. Start both recordings ~together, then drive the web hero (headed so
-      //    it's also watchable live). iOS mirrors the exchange in real time.
-      ios.startRecording();
+      // 2. Drive the web hero (headed so it's also watchable live).
       const res = await runWeb(cfg, scenario, world, idents, runId, {
-        headless: flags.headless ? true : false, // headed by default for video
+        headless: flags.headless ? true : false,
         injectIosHero: true,
       });
-      await ios.stopRecording();
+      await ios?.stopRecording();
 
-      // 3. Locate the web .webm and compose side-by-side.
+      // 3. Compose. Side-by-side when iOS recorded; single-pane otherwise.
       const webm = readdirSync(res.videoDir).find((f) => f.endsWith(".webm"));
       if (!webm) throw new Error("web video (.webm) not found — cannot compose");
-      const out = presolve(cfg.paths.artifacts, runId, "side-by-side.mp4");
-      console.log(`\n  composing side-by-side video…`);
-      composeSideBySide({
-        webVideo: presolve(res.videoDir, webm),
-        iosVideo: presolve(cfg.paths.artifacts, runId, "ios", "ios.mp4"),
-        out,
-        captions: res.captions,
-      });
+      const out = presolve(cfg.paths.artifacts, runId, webOnly ? "web-demo.mp4" : "side-by-side.mp4");
+      console.log(`\n  composing ${webOnly ? "web" : "side-by-side"} video…`);
+      if (webOnly) {
+        composeSinglePane({ video: presolve(res.videoDir, webm), out, label: `Web (React.js SDK)`, captions: res.captions });
+      } else {
+        composeSideBySide({
+          webVideo: presolve(res.videoDir, webm),
+          iosVideo: presolve(cfg.paths.artifacts, runId, "ios", "ios.mp4"),
+          out,
+          captions: res.captions,
+        });
+      }
       console.log(`  ${res.captions.length} timed captions burned in`);
-      console.log(`\n✔ side-by-side video: ${out}\n`);
+      console.log(`\n✔ video: ${out}\n`);
       break;
     }
     case "avatars": {
