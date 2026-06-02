@@ -16,6 +16,7 @@ export const midsummer: Scenario = {
   title: "A Midsummer Night's Dream",
   theme: "Shakespeare — the lovers and fairies in the forest near Athens",
   roomTitle: "The Forest Near Athens",
+  avatarStyle: "adventurer",
 
   cast: [
     { handle: "oberon", firstName: "Oberon", lastName: "Fairy-King", role: "King of the Fairies", avatarSeed: "Oberon", avatarColor: "#3b2e5a" },

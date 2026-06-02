@@ -47,6 +47,29 @@ export interface AvatarOpts {
   color?: string;
 }
 
+export interface AvatarFile {
+  buffer: Buffer;
+  filename: string;
+  contentType: string;
+}
+
+/**
+ * Fetch an illustrated avatar PNG from DiceBear (deterministic per seed). Far
+ * nicer than the local initials disc. Pastel background set so each avatar
+ * gets a distinct soft-coloured circle. Pure HTTP — no browser needed.
+ * Throws on non-2xx so callers can fall back to the local generator.
+ */
+export async function fetchDicebearAvatar(style: string, seed: string, size = 256): Promise<AvatarFile> {
+  const bg = "b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf,c1f0c8,fde68a";
+  const url =
+    `https://api.dicebear.com/9.x/${encodeURIComponent(style)}/png` +
+    `?seed=${encodeURIComponent(seed)}&size=${size}&radius=50&backgroundColor=${bg}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`DiceBear ${style} ${seed} -> ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { buffer, filename: `${seed.toLowerCase()}.png`, contentType: "image/png" };
+}
+
 /**
  * Rasterize the themed avatar SVG to PNG via a headless Chromium page.
  *
@@ -87,5 +110,32 @@ export class AvatarRasterizer {
     await this.browser?.close();
     this.browser = null;
     this.page = null;
+  }
+}
+
+/**
+ * Resolves cast avatars: DiceBear illustrated PNGs (primary), falling back to
+ * the local initials disc only if DiceBear is unreachable. The Playwright
+ * rasterizer is launched lazily — the happy path needs no browser.
+ */
+export class AvatarProvider {
+  private rasterizer: AvatarRasterizer | null = null;
+  constructor(private style: string) {}
+
+  async get(opts: AvatarOpts): Promise<AvatarFile> {
+    try {
+      return await fetchDicebearAvatar(this.style, opts.seed);
+    } catch {
+      if (!this.rasterizer) {
+        this.rasterizer = new AvatarRasterizer();
+        await this.rasterizer.init();
+      }
+      return this.rasterizer.toPng(opts);
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.rasterizer?.close();
+    this.rasterizer = null;
   }
 }

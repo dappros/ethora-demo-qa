@@ -48,6 +48,8 @@ export interface Scenario {
   theme: string;
   /** Room title for the group chat. */
   roomTitle: string;
+  /** DiceBear avatar style (https://dicebear.com). Default "adventurer". */
+  avatarStyle?: string;
   cast: CastMember[];
   /**
    * Which cast handle is driven live on each surface. Everyone else is a
