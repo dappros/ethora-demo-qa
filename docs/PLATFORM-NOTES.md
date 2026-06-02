@@ -95,6 +95,9 @@
   envelope `photo`, and the member list omits `profileImage` (see §2) — so
   incoming messages fell back to initials. Patched on `tf-demo-qa-hooks` (web +
   RN) by mapping the envelope photo onto `user.profileImage`.
+  - The harness now uploads illustrated **DiceBear** avatars (style per
+    scenario, default `adventurer`) instead of flat initials discs — nicer for
+    demos. Still PNG (SVG is blocked by the file server, see above).
   - **Web: confirmed working** — all sender avatars render as images.
   - **🔴 RN/iOS: still renders initials** even after the same fix, a clean
     rebuild (cleared Metro + expo caches, `--no-build-cache`), and verifying the
