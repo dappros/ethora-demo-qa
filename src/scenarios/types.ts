@@ -39,6 +39,19 @@ export type Beat =
   | { kind: "edit"; actor: string; targetText: string; newText: string; caption?: string; note?: string }
   | { kind: "delete"; actor: string; targetText: string; caption?: string; note?: string }
   | { kind: "history"; actor: string; caption?: string; note?: string }
+  // --- advanced / rich features ---
+  // React to a message with an emoji (reaction id: heart, joy, fire, +1, smile, scream).
+  | { kind: "reaction"; actor: string; targetText: string; emoji: string; caption?: string; note?: string }
+  // Threaded reply to a specific message.
+  | { kind: "reply"; actor: string; targetText: string; text: string; caption?: string; note?: string }
+  // Voice note (audio media), injected over XMPP with a waveform.
+  | { kind: "voice"; actor: string; seconds?: number; caption?: string; note?: string }
+  // --- resilience ---
+  // Drop the web client's network for `offlineMs`, then restore; messages
+  // injected during the outage backfill on reconnect.
+  | { kind: "reconnect"; offlineMs?: number; duringOffline?: { actor: string; text: string }[]; caption?: string; note?: string }
+  // Switch the web client to another room and back, exercising per-room state.
+  | { kind: "switchRoom"; caption?: string; note?: string }
   | { kind: "screenshot"; surface: Surface | "both"; label: string; note?: string }
   | { kind: "wait"; ms: number; note?: string };
 
@@ -48,6 +61,10 @@ export interface Scenario {
   theme: string;
   /** Room title for the group chat. */
   roomTitle: string;
+  /** Optional second room title — provisions a second room for switchRoom. */
+  secondRoomTitle?: string;
+  /** Backstory for the second room (so it isn't empty when switched to). */
+  secondRoomHistory?: { actor: string; text: string }[];
   /** DiceBear avatar style (https://dicebear.com). Default "adventurer". */
   avatarStyle?: string;
   cast: CastMember[];

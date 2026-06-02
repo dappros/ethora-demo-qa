@@ -77,7 +77,20 @@ export class HarnessXmpp {
 
   private send(stanza: any): void {
     if (!this.xmpp) throw new Error("xmpp not connected");
-    this.xmpp.send(stanza);
+    // @xmpp/client send() returns a promise that rejects (e.g. "Connection is
+    // closing") if the socket is mid-teardown. Swallow it so a flaky send never
+    // becomes an unhandled rejection that crashes the whole run.
+    try {
+      const r = this.xmpp.send(stanza) as unknown as { catch?: (f: () => void) => void };
+      if (r && typeof r.catch === "function") r.catch(() => {});
+    } catch {
+      /* connection gone — caller decides whether to reconnect */
+    }
+  }
+
+  /** True when the XMPP stream is established. */
+  get online(): boolean {
+    return (this.xmpp as unknown as { status?: string } | null)?.status === "online";
   }
 
   private waitForIqResult(id: string, timeoutMs = 4000): Promise<boolean> {
@@ -222,6 +235,48 @@ export class HarnessXmpp {
           push: "true",
         }),
         xml("body", {}, text))
+    );
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  /**
+   * Send a media (e.g. voice note) message. The component renders audio/* via
+   * its wavesurfer player from `location`, which can be an http URL or a
+   * data: URI — the latter lets us ship a voice note without the file server
+   * (QA's /files endpoint 500s on audio uploads).
+   */
+  async sendMedia(
+    roomJid: string,
+    media: { location: string; mimetype: string; fileName: string; duration?: number; size?: number }
+  ): Promise<void> {
+    const id = `send-media-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    this.send(
+      xml("message", { to: roomJid, type: "groupchat", id, from: this.jidString },
+        xml("body", {}, "media"),
+        xml("store", { xmlns: "urn:xmpp:hints" }),
+        xml("data", {
+          xmlns: this.service,
+          senderFirstName: this.identity.firstName,
+          senderLastName: this.identity.lastName,
+          fullName: `${this.identity.firstName} ${this.identity.lastName}`,
+          photo: this.identity.photo,
+          photoURL: this.identity.photo,
+          senderJID: this.jidString,
+          senderWalletAddress: this.identity.walletAddress,
+          roomJid,
+          isSystemMessage: false,
+          isMediafile: true,
+          tokenAmount: 0,
+          location: media.location,
+          locationPreview: media.location,
+          mimetype: media.mimetype,
+          fileName: media.fileName,
+          originalName: media.fileName,
+          size: media.size ?? 0,
+          duration: media.duration ?? 0,
+          isReply: false,
+          push: "true",
+        }))
     );
     await new Promise((r) => setTimeout(r, 250));
   }

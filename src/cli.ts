@@ -4,10 +4,12 @@ import { setupRoom, loginCast } from "./provision/room-setup.js";
 import { loadWorld } from "./provision/state.js";
 import { runWeb } from "./web/runner.js";
 import { midsummer } from "./scenarios/midsummer.js";
+import { advanced } from "./scenarios/advanced.js";
 import type { Scenario } from "./scenarios/types.js";
 
 const SCENARIOS: Record<string, Scenario> = {
   midsummer,
+  advanced,
 };
 
 function getScenario(id: string | undefined): Scenario {

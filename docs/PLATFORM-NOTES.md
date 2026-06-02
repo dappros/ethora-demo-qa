@@ -111,6 +111,20 @@
     added on `main` normalising the stored `user`. Needs an interactive RN
     debug session (log `message.user` at the bubble) to localise.
 
+## 4b. File uploads — audio rejected
+
+- `POST /v1/files/` (and `/v2/files/`) returns **500 Internal Server Error for
+  every audio upload** tried on QA (mp3/wav/ogg/webm/m4a), while image uploads
+  (PNG) succeed. 🔴 This blocks **voice notes** end-to-end on QA — the harness
+  supports a `voice` beat (XMPP media stanza) and it works against a server that
+  accepts audio uploads, but on QA there is nowhere to host the audio.
+- Embedding the audio as a base64 `data:` URI in the media stanza was tried as a
+  workaround; the component's media bubble does not render a `data:` location
+  (the wavesurfer player needs a fetchable http(s) URL), so it shows an empty
+  bubble. **Recommendation:** fix the `/files` audio handling on QA (it likely
+  throws while generating a waveform/transcode), so voice notes are testable
+  pre-production.
+
 ## 5. SDK / build (React Native)
 
 - The RN component (`ethora-chat-component-rn`) is **~Expo but not fully

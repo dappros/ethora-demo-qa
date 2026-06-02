@@ -96,11 +96,12 @@ export class EthoraApi {
   private async req<T = any>(
     method: string,
     path: string,
-    opts: { token?: string; json?: unknown; form?: FormData } = {}
+    opts: { token?: string; json?: unknown; form?: FormData; accept?: string } = {}
   ): Promise<T> {
     const url = `${this.origin}${path}`;
     const headers: Record<string, string> = {};
     if (opts.token) headers.Authorization = opts.token;
+    if (opts.accept) headers.Accept = opts.accept;
     let body: BodyInit | undefined;
     if (opts.form) {
       body = opts.form; // fetch sets the multipart boundary
@@ -214,6 +215,23 @@ export class EthoraApi {
       );
     }
     await this.req("PUT", "/v1/users/", { token: userToken, form });
+  }
+
+  /** Upload a file (POST /v1/files, multipart). Returns the public URL. */
+  async uploadFile(
+    userToken: string,
+    file: { buffer: Buffer; filename: string; contentType: string }
+  ): Promise<string> {
+    const form = new FormData();
+    form.append(
+      "files",
+      new Blob([new Uint8Array(file.buffer)], { type: file.contentType }),
+      file.filename
+    );
+    const data = await this.req<any>("POST", "/v1/files/", { token: userToken, form, accept: "*/*" });
+    const arr = data.results || data.files || (Array.isArray(data) ? data : null);
+    const f = (arr && arr[0]) || data;
+    return f.location || f.url || f.locationPreview;
   }
 
   // --- Rooms (backend-integrated /v1/chats; shows in client room lists) -----

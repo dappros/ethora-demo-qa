@@ -28,6 +28,8 @@ export interface World {
   users: Record<string, ProvisionedUser>;
   /** `name` is the backend room id (MUC localpart); `jid` = name@conference. */
   room?: { jid: string; name: string; title: string };
+  /** Optional second room, for multi-room switching demos. */
+  room2?: { jid: string; name: string; title: string };
 }
 
 export function worldPath(secretsDir: string, env: EnvName, scenarioId: string): string {

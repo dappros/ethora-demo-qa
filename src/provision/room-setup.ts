@@ -110,6 +110,21 @@ export async function setupRoom(
       await conns.get(line.actor)?.sendText(roomJid, line.text);
     }
     if (scenario.history.length) log(`Seeded ${scenario.history.length} backstory messages`);
+
+    // Optional second room (for multi-room switching demos).
+    if (scenario.secondRoomTitle) {
+      const chat2 = await api.createChat(heroToken, { title: scenario.secondRoomTitle, description: scenario.theme, type: "group" });
+      const room2Jid = `${chat2.name}@${cfg.server.xmppConference}`;
+      if (otherIds.length) await api.addChatMembers(heroToken, chat2.name, otherIds);
+      for (const line of scenario.secondRoomHistory ?? []) {
+        const x = conns.get(line.actor);
+        if (x) { await x.joinAndSubscribe(room2Jid); await x.sendText(room2Jid, line.text); }
+      }
+      world.room2 = { jid: room2Jid, name: chat2.name, title: chat2.title };
+      log(`Second room created: "${chat2.title}" (${room2Jid})`);
+    } else {
+      world.room2 = undefined;
+    }
   } finally {
     for (const x of conns.values()) await x.disconnect();
   }
